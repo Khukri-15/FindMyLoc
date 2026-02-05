@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Field GR Navigator</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<style>
+body {
+  font-family: 'Segoe UI', Arial;
+  background: linear-gradient(135deg,#0a0f18,#1b2735);
+  color: #00ff88;
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+}
+
+.container {
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(8px);
+  padding: 18px;
+  border-radius: 12px;
+  width: 390px;
+  box-shadow: 0 0 20px rgba(0,255,120,0.3);
+}
+
+h2 {
+  text-align: center;
+  margin-bottom: 10px;
+  letter-spacing: 1px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 5px;
+}
+
+button {
+  flex: 1;
+  padding: 11px;
+  margin-top: 6px;
+  font-size: 14px;
+  background: #001a12;
+  color: #00ff88;
+  border: 1px solid #00ff88;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+button:hover {
+  background: #003322;
+}
+
+label {
+  font-size: 13px;
+  margin-top: 6px;
+  display: block;
+  color: #66ffaa;
+}
+
+input {
+  width: 100%;
+  padding: 9px;
+  margin-top: 3px;
+  font-size: 14px;
+  background: black;
+  color: #00ff88;
+  border: 1px solid #00ff88;
+  border-radius: 6px;
+}
+
+#map {
+  height: 260px;
+  margin-top: 10px;
+  border-radius: 8px;
+  border: 1px solid #00ff88;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>FIELD GR NAVIGATOR</h2>
+
+<div class="toolbar">
+<button onclick="findLocation()">📍 Find Location</button>
+<button onclick="share()">Share</button>
+<button onclick="saveWaypoint()">Save WP</button>
+</div>
+
+<label>Latitude</label>
+<input id="lat" readonly>
+
+<label>Longitude</label>
+<input id="lon" readonly>
+
+<label>Easting</label>
+<input id="x" readonly>
+
+<label>Northing</label>
+<input id="y" readonly>
+
+<label>UTM Zone</label>
+<input id="zone" readonly>
+
+<div id="map"></div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+
+<script>
+
+let map = L.map('map').setView([20,78],4);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+let marker = L.marker([20,78]).addTo(map);
+let watchID = null;
+
+const latBox = document.getElementById("lat");
+const lonBox = document.getElementById("lon");
+const x = document.getElementById("x");
+const y = document.getElementById("y");
+const zoneBox = document.getElementById("zone");
+
+// LIVE GPS + AUTO GR
+function findLocation() {
+  if (watchID) navigator.geolocation.clearWatch(watchID);
+
+  watchID = navigator.geolocation.watchPosition(pos => {
+
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
+
+    latBox.value = lat.toFixed(6);
+    lonBox.value = lon.toFixed(6);
+
+    updateMap(lat, lon);
+    autoConvert(lat, lon);
+
+  }, () => alert("GPS permission denied"), {enableHighAccuracy:true});
+}
+
+function updateMap(lat, lon) {
+  map.setView([lat, lon], 16);
+  marker.setLatLng([lat, lon]);
+}
+
+// AUTO convert every GPS update
+function autoConvert(lat, lon) {
+
+  const zone = Math.floor((lon + 180) / 6) + 1;
+
+  const wgs84 = "+proj=longlat +datum=WGS84 +no_defs";
+  const utm = `+proj=utm +zone=${zone} +datum=WGS84 +units=m +no_defs`;
+
+  const r = proj4(wgs84, utm, [lon, lat]);
+
+  const e = Math.floor((r[0] % 100000)/100);
+  const n = Math.floor((r[1] % 100000)/100);
+
+  x.value = e.toString().padStart(3,"0");
+  y.value = n.toString().padStart(3,"0");
+  zoneBox.value = zone;
+
+  marker.bindPopup(`GR: ${x.value} ${y.value}`).openPopup();
+}
+
+// Save waypoint
+function saveWaypoint() {
+  const wp = L.marker(marker.getLatLng()).addTo(map);
+  wp.bindPopup(`WP: ${x.value} ${y.value}`);
+  alert("Waypoint saved");
+}
+
+// Share GR
+function share() {
+  const text = `GR ${x.value} ${y.value}\nLat:${latBox.value}\nLon:${lonBox.value}`;
+
+  if (navigator.share) {
+    navigator.share({text});
+  } else {
+    navigator.clipboard.writeText(text);
+    alert("Copied to clipboard");
+  }
+}
+
+</script>
+
+</body>
+</html>
